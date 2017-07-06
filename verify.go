@@ -16,8 +16,9 @@ const (
 	JWT_NOT_PRESENT       VerifyReasons = 1
 	JWT_EXPIRED           VerifyReasons = 2
 	JWT_INVALID_SIGNATURE VerifyReasons = 3
-	JWT_MALFORMED         VerifyReasons = 4
-	JWT_EXPECT_MISMATCH   VerifyReasons = 5
+	JWT_NO_VALIDATORS     VerifyReasons = 4
+	JWT_MALFORMED         VerifyReasons = 5
+	JWT_EXPECT_MISMATCH   VerifyReasons = 6
 )
 
 type VerifyErr struct {
@@ -78,6 +79,13 @@ func isAllowedAlgo(in jose.SignatureAlgorithm) bool {
 //
 // But its safe.
 func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
+	var now time.Time
+	if vc.Now == nil {
+		now = time.Now()
+	} else {
+		now = vc.Now()
+	}
+
 	object, err := jose.ParseSigned(string(input))
 	if err != nil {
 		return nil, err
@@ -142,9 +150,11 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 	}
 
 	if payload == nil {
+		// TODO(pquerna): this can happen if the JWT is very old, and all valid keys for
+		// validating it have expired, so we return invalid signature, even if no keys could be found?
 		return nil, &VerifyErr{
 			msg:    "xjwt: no matching keys could validate payload",
-			reason: JWT_INVALID_SIGNATURE,
+			reason: JWT_NO_VALIDATORS,
 		}
 	}
 
@@ -193,25 +203,18 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 		}
 	}
 
-	var now time.Time
-	if vc.Now == nil {
-		now = time.Now()
-	} else {
-		now = vc.Now()
-	}
-
 	expires := time.Time(idt.Expiry)
 	if now.After(expires) {
 		return nil, &VerifyErr{
 			msg:    fmt.Sprintf("xjwt: JWT expired: now:'%s' is after jwt:'%s'", now.String(), expires.String()),
-			reason: JWT_EXPECT_MISMATCH,
+			reason: JWT_EXPIRED,
 		}
 	}
 
 	if expires.After(now.Add(maxExpirationFromNow)) {
 		return nil, &VerifyErr{
 			msg:    fmt.Sprintf("xjwt: JWT has invalid expiration: jwt:'%s' is too far in the future (max:'%s')", expires.String(), now.Add(maxExpirationFromNow).String()),
-			reason: JWT_EXPECT_MISMATCH,
+			reason: JWT_EXPIRED,
 		}
 	}
 
@@ -219,7 +222,7 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 	if now.Before(nbf) {
 		return nil, &VerifyErr{
 			msg:    fmt.Sprintf("xjwt: JWT nbf is before now: jwt:'%s' now:'%s'", nbf.String(), now.String()),
-			reason: JWT_EXPECT_MISMATCH,
+			reason: JWT_EXPIRED,
 		}
 	}
 
