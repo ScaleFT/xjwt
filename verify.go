@@ -27,14 +27,14 @@ type VerifyErr struct {
 }
 
 type AuthzErrWithReason interface {
-	AuthzReason() VerifyReasons
+	XJWTVerifyReason() VerifyReasons
 }
 
 func (e *VerifyErr) Error() string {
 	return e.msg
 }
 
-func (e *VerifyErr) JWTVerifyReason() VerifyReasons {
+func (e *VerifyErr) XJWTVerifyReason() VerifyReasons {
 	return e.reason
 }
 
