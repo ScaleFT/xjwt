@@ -14,7 +14,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	otext "github.com/opentracing/opentracing-go/ext"
 	"github.com/pquerna/cachecontrol"
-	"go.uber.org/zap"
 	"golang.org/x/net/context/ctxhttp"
 	jose "gopkg.in/square/go-jose.v2"
 )
@@ -27,7 +26,6 @@ type KeysetOptions struct {
 	UserAgent        string
 	URL              string
 	Client           *http.Client
-	Log              *zap.Logger
 	MinCacheDuration time.Duration
 	MaxCacheDuration time.Duration
 	RefreshWarning   func(err error)
@@ -65,11 +63,7 @@ func NewRemoteKeyset(ctx context.Context, opts KeysetOptions) (*RemoteKeyset, er
 	}
 
 	if rk.opts.RefreshWarning == nil {
-		rk.opts.RefreshWarning = func(err error) {
-			rk.opts.Log.Warn("xjwt: failed to refresh",
-				zap.Error(err),
-			)
-		}
+		rk.opts.RefreshWarning = func(err error) {}
 	}
 	err := rk.init()
 	if err != nil {
