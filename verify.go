@@ -60,6 +60,7 @@ var validSignatureAlgorithm = []jose.SignatureAlgorithm{
 	jose.PS256, // RSASSA-PSS using SHA256 and MGF1-SHA256
 	jose.PS384, // RSASSA-PSS using SHA384 and MGF1-SHA384
 	jose.PS512, // RSASSA-PSS using SHA512 and MGF1-SHA512
+	jose.EdDSA, // EdDSA using Ed25519
 }
 
 func isAllowedAlgo(in jose.SignatureAlgorithm) bool {
@@ -227,6 +228,7 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 	}
 
 	data := make(map[string]interface{})
+
 	err = json.Unmarshal(payload, &data)
 	if err != nil {
 		return nil, &VerifyErr{
