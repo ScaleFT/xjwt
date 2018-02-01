@@ -46,15 +46,16 @@ func (e *VerifyErr) XJWTVerifyReason() VerifyReasons {
 }
 
 // TODO(pquerna): lower this after more research in realistic expiration times
-const maxExpirationFromNow = (time.Hour * 24) * 91
+const defaultMaxExpirationFromNow = (time.Hour * 24) * 91
 
 type VerifyConfig struct {
-	ExpectedIssuer   string
-	ExpectedSubject  string
-	ExpectedAudience string
-	ExpectedNonce    string
-	Now              func() time.Time
-	KeySet           *jose.JSONWebKeySet
+	ExpectedIssuer       string
+	ExpectedSubject      string
+	ExpectedAudience     string
+	ExpectedNonce        string
+	Now                  func() time.Time
+	MaxExpirationFromNow time.Duration
+	KeySet               *jose.JSONWebKeySet
 }
 
 var validSignatureAlgorithm = []jose.SignatureAlgorithm{
@@ -244,9 +245,14 @@ func VerifyRaw(input []byte, vc VerifyConfig) ([]byte, error) {
 		}
 	}
 
-	if expires.After(now.Add(maxExpirationFromNow)) {
+	maxExpires := vc.MaxExpirationFromNow
+	if maxExpires == 0 {
+		maxExpires = defaultMaxExpirationFromNow
+	}
+
+	if expires.After(now.Add(maxExpires)) {
 		return nil, &VerifyErr{
-			msg:    fmt.Sprintf("xjwt: JWT has invalid expiration: jwt:'%s' is too far in the future (max:'%s')", expires.String(), now.Add(maxExpirationFromNow).String()),
+			msg:    fmt.Sprintf("xjwt: JWT has invalid expiration: jwt:'%s' is too far in the future (max:'%s')", expires.String(), now.Add(maxExpires).String()),
 			reason: JWT_EXPIRED,
 		}
 	}
