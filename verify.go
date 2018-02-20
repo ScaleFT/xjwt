@@ -26,6 +26,13 @@ type VerifyErr struct {
 	reason VerifyReasons
 }
 
+func NewVerifyErr(msg string, reason VerifyReasons) *VerifyErr {
+	return &VerifyErr{
+		msg:    msg,
+		reason: reason,
+	}
+}
+
 type AuthzErrWithReason interface {
 	XJWTVerifyReason() VerifyReasons
 }
@@ -39,15 +46,16 @@ func (e *VerifyErr) XJWTVerifyReason() VerifyReasons {
 }
 
 // TODO(pquerna): lower this after more research in realistic expiration times
-const maxExpirationFromNow = (time.Hour * 24) * 91
+const defaultMaxExpirationFromNow = (time.Hour * 24) * 91
 
 type VerifyConfig struct {
-	ExpectedIssuer   string
-	ExpectedSubject  string
-	ExpectedAudience string
-	ExpectedNonce    string
-	Now              func() time.Time
-	KeySet           *jose.JSONWebKeySet
+	ExpectedIssuer       string
+	ExpectedSubject      string
+	ExpectedAudience     string
+	ExpectedNonce        string
+	Now                  func() time.Time
+	MaxExpirationFromNow time.Duration
+	KeySet               *jose.JSONWebKeySet
 }
 
 var validSignatureAlgorithm = []jose.SignatureAlgorithm{
@@ -72,7 +80,7 @@ func isAllowedAlgo(in jose.SignatureAlgorithm) bool {
 	return false
 }
 
-// Verify verifies a JWT.
+// Verify verifies a JWT, and returns a map containing the payload claims
 //
 // It is paranoid.  It has default settings for "real world" JWT usage as an HTTP Header.
 //
@@ -80,6 +88,31 @@ func isAllowedAlgo(in jose.SignatureAlgorithm) bool {
 //
 // But its safe.
 func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
+	payload, err := VerifyRaw(input, vc)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make(map[string]interface{})
+	err = json.Unmarshal(payload, &data)
+	if err != nil {
+		return nil, &VerifyErr{
+			msg:    fmt.Sprintf("xjwt: data did not contain JSON: %v", err.Error()),
+			reason: JWT_MALFORMED,
+		}
+	}
+	return data, nil
+}
+
+// Verify verifies a JWT, and returns the raw payload as a byte string
+//
+// It is paranoid.  It has default settings for "real world" JWT usage as an HTTP Header.
+//
+// It will reject potentially valid JWTs nd related specifications.
+//
+// But its safe.
+func VerifyRaw(input []byte, vc VerifyConfig) ([]byte, error) {
+
 	var now time.Time
 	if vc.Now == nil {
 		now = time.Now()
@@ -212,9 +245,14 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 		}
 	}
 
-	if expires.After(now.Add(maxExpirationFromNow)) {
+	maxExpires := vc.MaxExpirationFromNow
+	if maxExpires == 0 {
+		maxExpires = defaultMaxExpirationFromNow
+	}
+
+	if expires.After(now.Add(maxExpires)) {
 		return nil, &VerifyErr{
-			msg:    fmt.Sprintf("xjwt: JWT has invalid expiration: jwt:'%s' is too far in the future (max:'%s')", expires.String(), now.Add(maxExpirationFromNow).String()),
+			msg:    fmt.Sprintf("xjwt: JWT has invalid expiration: jwt:'%s' is too far in the future (max:'%s')", expires.String(), now.Add(maxExpires).String()),
 			reason: JWT_EXPIRED,
 		}
 	}
@@ -227,17 +265,7 @@ func Verify(input []byte, vc VerifyConfig) (map[string]interface{}, error) {
 		}
 	}
 
-	data := make(map[string]interface{})
-
-	err = json.Unmarshal(payload, &data)
-	if err != nil {
-		return nil, &VerifyErr{
-			msg:    fmt.Sprintf("xjwt: data did not contain JSON: %v", err.Error()),
-			reason: JWT_MALFORMED,
-		}
-	}
-
-	return data, nil
+	return payload, nil
 }
 
 // from https://github.com/coreos/go-oidc/blob/master/oidc.go
