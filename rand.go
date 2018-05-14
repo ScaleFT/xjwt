@@ -14,6 +14,7 @@ type RandomNonce struct {
 
 var _ jose.NonceSource = (*RandomNonce)(nil)
 
+// Nonce returns a random string or an error
 func (rn *RandomNonce) Nonce() (string, error) {
 	s := rn.Size
 	if s == 0 {

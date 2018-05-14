@@ -11,6 +11,9 @@ import (
 )
 
 // ParsePrivateKey converts a private key from a PEM encoding to a *jose.JSONWebKey.
+//
+// Optionally, a passphrase for an encrypted X.509 document can be passed in.  If the
+// contents of the PEM is not encrypted, passphrase is ignored.
 func ParsePrivateKey(privateKey []byte, passphrase []byte) (*jose.JSONWebKey, jose.SignatureAlgorithm, error) {
 	pk, err := unmarshalPrivateKey(privateKey, passphrase)
 	if err != nil {

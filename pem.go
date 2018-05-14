@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// ErrIncorrectPassword means when attempting to parse an encrypted PEM file, the password was likely incorrect
 var ErrIncorrectPassword = x509.IncorrectPasswordError
 
 func unmarshalPrivateKey(data []byte, passphrase []byte) (crypto.PrivateKey, error) {
