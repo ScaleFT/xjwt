@@ -22,7 +22,7 @@ const (
 	xjwtOpenTracingTag = "com.scaleft.xjwt"
 )
 
-type KeysetOptions struct {
+type Options struct {
 	UserAgent        string
 	URL              string
 	Client           *http.Client
@@ -31,15 +31,15 @@ type KeysetOptions struct {
 	RefreshWarning   func(err error)
 }
 
-// NewRemoteKeyset creates a JSON Keyset that is cached in memory.
+// New creates a JSON Keyset that is cached in memory.
 //
 // On creation, it will do a block HTTP request to load the initial keyset.
 //
 // After initial load, it will refresh the cached keyset, any consumers may see
 // older versions of the cache until the refresh is complete.
 //
-// NewRemoteKeyset emits opentracing spans on the supplied context when fetching the keyset.
-func NewRemoteKeyset(ctx context.Context, opts KeysetOptions) (*RemoteKeyset, error) {
+// New emits opentracing spans on the supplied context when fetching the keyset.
+func New(ctx context.Context, opts Options) (*RemoteKeyset, error) {
 	ctx, cfunc := context.WithCancel(ctx)
 	rk := &RemoteKeyset{
 		ctx:    ctx,
@@ -73,7 +73,7 @@ func NewRemoteKeyset(ctx context.Context, opts KeysetOptions) (*RemoteKeyset, er
 }
 
 type RemoteKeyset struct {
-	opts KeysetOptions
+	opts Options
 
 	ctx   context.Context
 	cfunc context.CancelFunc
@@ -128,7 +128,7 @@ func (rk *RemoteKeyset) fetchKeyset() (*jose.JSONWebKeySet, time.Duration, error
 	if rk.opts.UserAgent != "" {
 		req.Header.Set("User-Agent", rk.opts.UserAgent)
 	} else {
-		req.Header.Set("User-Agent", "xjwt.go/0.1.0")
+		req.Header.Set("User-Agent", "xjwt-keyset.go/0.1.0")
 	}
 
 	sp, ctx := opentracing.StartSpanFromContext(ctx, "xjwt.keyset.fetch")
