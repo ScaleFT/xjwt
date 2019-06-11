@@ -29,6 +29,8 @@ type Options struct {
 	MinCacheDuration time.Duration
 	MaxCacheDuration time.Duration
 	RefreshWarning   func(err error)
+	// RefreshContext is used during background refreshing of the Keyset. If unset, context.Background() is used.
+	RefreshContext context.Context
 }
 
 // New creates a JSON Keyset that is cached in memory.
@@ -39,10 +41,14 @@ type Options struct {
 // older versions of the cache until the refresh is complete.
 //
 // New emits opentracing spans on the supplied context when fetching the keyset.
-func New(ctx context.Context, opts Options) (*RemoteKeyset, error) {
-	ctx, cfunc := context.WithCancel(ctx)
+func New(initCtx context.Context, opts Options) (*RemoteKeyset, error) {
+	rctx := opts.RefreshContext
+	if rctx == nil {
+		rctx = context.Background()
+	}
+	rctx, cfunc := context.WithCancel(rctx)
 	rk := &RemoteKeyset{
-		ctx:    ctx,
+		ctx:    rctx,
 		cfunc:  cfunc,
 		opts:   opts,
 		client: opts.Client,
@@ -65,7 +71,7 @@ func New(ctx context.Context, opts Options) (*RemoteKeyset, error) {
 	if rk.opts.RefreshWarning == nil {
 		rk.opts.RefreshWarning = func(err error) {}
 	}
-	err := rk.init()
+	err := rk.init(initCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +90,9 @@ type RemoteKeyset struct {
 	current atomic.Value
 }
 
-func (rk *RemoteKeyset) init() error {
+func (rk *RemoteKeyset) init(ctx context.Context) error {
 	rk.current.Store(&jose.JSONWebKeySet{})
-	rv, refresh, err := rk.fetchKeyset()
+	rv, refresh, err := rk.fetchKeyset(ctx)
 	if err != nil {
 		return err
 	}
@@ -102,7 +108,7 @@ func (rk *RemoteKeyset) refreshKeySet(refresh time.Duration) {
 	case <-rk.ctx.Done():
 		return
 	case <-time.After(refresh):
-		rv, d, err := rk.fetchKeyset()
+		rv, d, err := rk.fetchKeyset(rk.ctx)
 		if err != nil {
 			rk.opts.RefreshWarning(err)
 			go rk.refreshKeySet(refresh)
@@ -114,8 +120,8 @@ func (rk *RemoteKeyset) refreshKeySet(refresh time.Duration) {
 	}
 }
 
-func (rk *RemoteKeyset) fetchKeyset() (*jose.JSONWebKeySet, time.Duration, error) {
-	ctx, cancel := context.WithTimeout(rk.ctx, time.Second*30)
+func (rk *RemoteKeyset) fetchKeyset(ctx context.Context) (*jose.JSONWebKeySet, time.Duration, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
 	req, err := http.NewRequest("GET", rk.opts.URL, nil)
