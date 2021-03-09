@@ -79,6 +79,8 @@ type VerifyConfig struct {
 	MaxExpirationFromNow time.Duration
 	// KeySet is a set of JWKs that are trusted by the verifier, and used to validate the JWT.
 	KeySet *jose.JSONWebKeySet
+	// ExpectSymmetrical validates asymmetrical keys are used, if true symmetrical keys are expected.
+	ExpectSymmetrical bool
 }
 
 var validSignatureAlgorithm = []jose.SignatureAlgorithm{
@@ -94,8 +96,18 @@ var validSignatureAlgorithm = []jose.SignatureAlgorithm{
 	jose.EdDSA, // EdDSA using Ed25519
 }
 
-func isAllowedAlgo(in jose.SignatureAlgorithm) bool {
-	for _, validAlgo := range validSignatureAlgorithm {
+var validSymmetricalSignatureAlgorithm = []jose.SignatureAlgorithm{
+	jose.HS256, // HMAC using SHA-256
+	jose.HS384, // HMAC using SHA-384
+	jose.HS512, // HMAC using SHA-512
+}
+
+func isAllowedAlgo(in jose.SignatureAlgorithm, vc VerifyConfig) bool {
+	validSigAlgo := validSignatureAlgorithm
+	if vc.ExpectSymmetrical {
+		validSigAlgo = validSymmetricalSignatureAlgorithm
+	}
+	for _, validAlgo := range validSigAlgo {
 		if in == validAlgo {
 			return true
 		}
@@ -162,7 +174,7 @@ func VerifyRaw(input []byte, vc VerifyConfig) ([]byte, error) {
 
 	algo := jose.SignatureAlgorithm(signature.Header.Algorithm)
 
-	if !isAllowedAlgo(algo) {
+	if !isAllowedAlgo(algo, vc) {
 		return nil, &VerifyErr{
 			msg:    "xjwt: signature uses unsupported algorithm",
 			reason: JWT_INVALID_SIGNATURE,
@@ -190,7 +202,7 @@ func VerifyRaw(input []byte, vc VerifyConfig) ([]byte, error) {
 			continue
 		}
 
-		if !key.IsPublic() {
+		if !vc.ExpectSymmetrical && !key.IsPublic() {
 			payload = nil
 			return nil, &VerifyErr{
 				msg:    "xjwt: only public key verification is allowed",
