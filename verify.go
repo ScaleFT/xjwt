@@ -210,6 +210,14 @@ func VerifyRaw(input []byte, vc VerifyConfig) ([]byte, error) {
 			}
 		}
 
+		if vc.ExpectSymmetrical && key.IsPublic() {
+			payload = nil
+			return nil, &VerifyErr{
+				msg:    "xjwt: only symmetrical key verification is allowed",
+				reason: JWT_INVALID_SIGNATURE,
+			}
+		}
+
 		// payload != nil
 		break
 	}
