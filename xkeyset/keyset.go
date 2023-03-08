@@ -11,11 +11,11 @@ import (
 
 	"io/ioutil"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/go-jose/go-jose/v3"
+	"github.com/opentracing/opentracing-go"
 	otext "github.com/opentracing/opentracing-go/ext"
 	"github.com/pquerna/cachecontrol"
 	"golang.org/x/net/context/ctxhttp"
-	jose "gopkg.in/square/go-jose.v2"
 )
 
 const (
